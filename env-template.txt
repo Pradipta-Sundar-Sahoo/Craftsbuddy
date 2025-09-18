@@ -1,0 +1,9 @@
+# CraftBuddy Telegram Bot Environment Variables
+# Copy this file to .env and fill in your actual values
+
+# Required: Telegram Bot Token from BotFather
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+
+# Optional: Gemini AI API Key for advanced features
+# If not provided, the bot will work with basic functionality
+GEMINI_API_KEY=your_gemini_api_key_here
