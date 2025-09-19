@@ -12,12 +12,20 @@ class SessionData:
     spec_questions: Dict[str, str] = field(default_factory=dict)
     current_spec_index: int = 0
     cloud_image_url: Optional[str] = None
+    telegram_user_id: Optional[int] = None  # Store telegram user ID for database operations
+    
+    # AI suggestions storage
+    name_suggestions: List[str] = field(default_factory=list)
+    spec_suggestions: Dict[str, Dict[str, List[str]]] = field(default_factory=dict)
+    
+    # Current suggestion context
+    current_spec_key: Optional[str] = None
 
 @dataclass
 class Session:
     """User session model"""
     chat_id: int
-    stage: str = "await_initial_choice"
+    stage: str = "await_authentication"
     data: SessionData = field(default_factory=SessionData)
     llm_history: List[Any] = field(default_factory=list)
     last_interaction_time: float = field(default_factory=time.time)
@@ -33,7 +41,7 @@ class Session:
     
     def reset(self) -> None:
         """Reset session to initial state"""
-        self.stage = "await_initial_choice"
+        self.stage = "await_authentication"
         self.data = SessionData()
         self.llm_history = []
         self.update_interaction_time()
@@ -52,7 +60,6 @@ class SessionManager:
         if chat_id in self.sessions:
             session = self.sessions[chat_id]
             if session.is_expired(self.timeout_seconds):
-                print(f"Chat {chat_id} session timed out. Resetting context.")
                 session.reset()
             else:
                 session.update_interaction_time()

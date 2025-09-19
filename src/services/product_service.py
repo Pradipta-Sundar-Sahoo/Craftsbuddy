@@ -66,6 +66,9 @@ class ProductService:
         logger.info(f"🔄 Starting image upload process for chat {chat_id}, file_id: {file_id}")
         
         try:
+            # Send simple feedback to user
+            self.telegram.send_message(chat_id, "📸 Processing image...")
+            
             # Get file info from Telegram
             logger.info(f"🔄 Getting file info from Telegram for file_id: {file_id}")
             file_path = self.telegram.get_file_info(file_id)
@@ -242,19 +245,21 @@ class ProductService:
     def finalize_product(
         self,
         chat_id: int,
+        telegram_user_id: int,
         session: Session
     ) -> Optional[Product]:
         """
         Finalize product with AI processing and save to database
         
         Args:
-            chat_id: Chat ID
+            chat_id: Chat ID (for messaging)
+            telegram_user_id: Telegram user ID (for database operations)
             session: User session
             
         Returns:
             Finalized Product object or None if failed
         """
-        logger.info(f"🔄 Starting product finalization for chat {chat_id}")
+        logger.info(f"🔄 Starting product finalization for chat {chat_id}, telegram_user_id: {telegram_user_id}")
         
         try:
             self.telegram.send_message(
@@ -288,22 +293,30 @@ class ProductService:
             logger.info(f"🤖 AI response: {desc_and_price}")
             
             # Get or create seller
-            logger.info(f"🔄 Getting/creating seller for chat {chat_id}")
-            seller = self.db_service.get_seller_by_chat_id(chat_id)
+            logger.info(f"🔄 Getting/creating seller for telegram_user_id {telegram_user_id}")
+            seller = self.db_service.get_seller_by_telegram_id(telegram_user_id)
             if not seller:
-                logger.info(f"👤 Creating new seller for chat {chat_id}")
+                logger.info(f"👤 Creating new seller for telegram_user_id {telegram_user_id}")
                 seller = self.db_service.create_seller(
-                    chat_id=chat_id,
-                    name=f"User_{chat_id}"
+                    name=f"User_{telegram_user_id}",
+                    telegram_id=telegram_user_id
                 )
                 if not seller:
-                    logger.error(f"❌ Failed to create seller for chat {chat_id}")
+                    logger.error(f"❌ Failed to create seller for telegram_user_id {telegram_user_id}")
                     return None
                 logger.info(f"✅ Created seller with ID: {seller.id}")
             else:
                 logger.info(f"✅ Found existing seller with ID: {seller.id}")
             
             # Save product to database
+            logger.info(f"💾 Saving product to database...")
+            logger.info(f"👤 Seller ID: {seller.id} (Name: {seller.name})")
+            logger.info(f"📝 Product name: {product_data['product_name']}")
+            logger.info(f"💰 Price: {desc_and_price.get('standardized_price', 0)}")
+            logger.info(f"📄 Description: {desc_and_price.get('description', 'Product description')[:100]}...")
+            logger.info(f"🌐 Cloud image URL: {cloud_image_url}")
+            logger.info(f"📋 Specifications to save: {session.data.specifications}")
+            
             logger.info(f"💾 Saving product to database...")
             db_product = self.db_service.create_product(
                 seller_id=seller.id,
@@ -315,7 +328,7 @@ class ProductService:
             )
             
             if not db_product:
-                logger.error(f"❌ Failed to save product to database for chat {chat_id}")
+                logger.error(f"❌ Failed to save product to database for telegram_user_id {telegram_user_id}")
                 return None
             
             logger.info(f"✅ Product saved to database successfully!")
@@ -333,11 +346,11 @@ class ProductService:
                 cloud_image_url=db_product.cloud_image_url
             )
             
-            logger.info(f"🎉 Product finalization completed successfully for chat {chat_id}")
+            logger.info(f"🎉 Product finalization completed successfully for telegram_user_id {telegram_user_id}")
             return product
             
         except Exception as e:
-            logger.error(f"💥 Exception in product finalization for chat {chat_id}: {e}")
+            logger.error(f"💥 Exception in product finalization for telegram_user_id {telegram_user_id}: {e}")
             import traceback
             logger.error(f"📋 Traceback: {traceback.format_exc()}")
             return None

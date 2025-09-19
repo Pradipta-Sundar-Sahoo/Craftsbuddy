@@ -2,19 +2,24 @@
 import sys
 import os
 
+# Add parent directory to Python path to enable imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from src.bot import CraftBuddyBot
 from src.utils.logger import setup_logger
 
 def main():
     """Main entry point"""
+    
     # Setup main logger
     logger = setup_logger("craftbuddy_main", "INFO", "main.log")
     
     try:
-        logger.info("Starting CraftBuddy Telegram Bot...")
         
         # Create and run bot
+        
         bot = CraftBuddyBot()
+        
         bot.run()
         
     except KeyboardInterrupt:

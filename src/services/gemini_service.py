@@ -102,6 +102,111 @@ class GeminiService:
             logger.error(f"Error analyzing product name for specs: {e}")
             return self._get_fallback_specs(product_name)
     
+    def get_product_name_suggestions(self, image_url: str) -> List[str]:
+        """
+        Get 3 product name suggestions based on image analysis
+        
+        Args:
+            image_url: URL to product image (GCS URL)
+            
+        Returns:
+            List of 3 product name suggestions
+        """
+        if not self.enabled:
+            logger.warning(f"Gemini not enabled, returning fallback suggestions")
+            return ["Handcrafted Product", "Artisan Creation", "Traditional Craft"]
+        
+        try:
+            image = self._load_image_from_url(image_url)
+            if not image:
+                logger.warning(f"Failed to load image, returning fallback")
+                return ["Handcrafted Product", "Artisan Creation", "Traditional Craft"]
+            
+            prompt = (
+                "Analyze this artisan product image and suggest exactly 3 creative, marketable product names. "
+                "Focus on traditional craftsmanship and cultural heritage. "
+                "Each name should be 2-4 words, appealing to buyers, and highlight the artisan nature. "
+                "Return only a JSON array of exactly 3 strings, nothing else. "
+                "Example: [\"Handwoven Cotton Scarf\", \"Traditional Block Print Textile\", \"Artisan Dyed Fabric\"]"
+            )
+            
+            response = self.model.generate_content([prompt, image])
+            
+            response_text = self._clean_json_response(response.text.strip())
+            
+            suggestions = json.loads(response_text)
+            if isinstance(suggestions, list) and len(suggestions) == 3:
+                logger.info(f"Successfully parsed {len(suggestions)} suggestions")
+                return suggestions
+            else:
+                logger.warning(f"Invalid suggestions format: {suggestions}, using fallback")
+                return ["Handcrafted Product", "Artisan Creation", "Traditional Craft"]
+                
+        except Exception as e:
+            logger.error(f"Error getting product name suggestions: {e}")
+            return ["Handcrafted Product", "Artisan Creation", "Traditional Craft"]
+    
+    def get_specification_suggestions(self, image_url: str, product_name: str) -> Dict[str, Dict[str, List[str]]]:
+        """
+        Get specification questions with 3 suggestions each based on image and product name
+        
+        Args:
+            image_url: URL to product image (GCS URL)
+            product_name: Chosen product name
+            
+        Returns:
+            Dictionary with spec questions and their suggestions
+        """
+        if not self.enabled:
+            return self._get_fallback_spec_suggestions(product_name)
+        
+        try:
+            image = self._load_image_from_url(image_url)
+            if not image:
+                return self._get_fallback_spec_suggestions(product_name)
+            
+            # First get the relevant specification questions for this product
+            spec_questions = self.analyze_product_name_for_specs(product_name)
+            
+            # Now get 3 suggestions for each specification based on the image
+            prompt = (
+                f"Analyze this image of '{product_name}' and provide exactly 3 specific suggestions for each specification. "
+                f"Base suggestions on what you can see in the image and typical artisan product characteristics. "
+                f"Specifications to suggest for: {list(spec_questions.keys())} "
+                f"Return a JSON object where each specification key has an array of exactly 3 specific suggestions. "
+                f"Make suggestions realistic and based on visual analysis. "
+                f"Example format: {{"
+                f"\"material\": [\"Cotton\", \"Silk\", \"Linen\"], "
+                f"\"colour\": [\"Deep Blue\", \"Indigo\", \"Navy Blue\"]"
+                f"}}"
+            )
+            
+            response = self.model.generate_content([prompt, image])
+            response_text = self._clean_json_response(response.text.strip())
+            
+            suggestions = json.loads(response_text)
+            
+            # Combine questions with suggestions
+            result = {}
+            for spec_key, question in spec_questions.items():
+                if spec_key in suggestions and isinstance(suggestions[spec_key], list):
+                    result[spec_key] = {
+                        "question": question,
+                        "suggestions": suggestions[spec_key][:3]  # Ensure only 3 suggestions
+                    }
+                else:
+                    # Fallback suggestions for this spec
+                    result[spec_key] = {
+                        "question": question,
+                        "suggestions": self._get_fallback_suggestions_for_spec(spec_key)
+                    }
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error getting specification suggestions: {e}")
+            return self._get_fallback_spec_suggestions(product_name)
+    
     def analyze_product_image(
         self,
         image_url: str,
@@ -318,10 +423,39 @@ class GeminiService:
         import re
         
         price_str = product_data.get('price', '0')
-        price_match = re.search(r'\\d+', str(price_str))
+        price_match = re.search(r'\d+', str(price_str))
         standardized_price = int(price_match.group()) if price_match else 0
         
         return {
             "description": "Premium quality product with excellent craftsmanship and attention to detail.",
             "standardized_price": standardized_price
         }
+    
+    def _get_fallback_spec_suggestions(self, product_name: str) -> Dict[str, Dict[str, List[str]]]:
+        """Get fallback specification suggestions when AI is not available"""
+        fallback_specs = self._get_fallback_specs(product_name)
+        
+        result = {}
+        for spec_key, question in fallback_specs.items():
+            result[spec_key] = {
+                "question": question,
+                "suggestions": self._get_fallback_suggestions_for_spec(spec_key)
+            }
+        return result
+    
+    def _get_fallback_suggestions_for_spec(self, spec_key: str) -> List[str]:
+        """Get fallback suggestions for a specific specification"""
+        fallback_suggestions = {
+            "material": ["Cotton", "Silk", "Wool"],
+            "colour": ["Natural", "Blue", "Red"],
+            "craft_style": ["Handwoven", "Block Print", "Embroidered"],
+            "occasion": ["Daily Wear", "Festive", "Casual"],
+            "care_instructions": ["Hand Wash", "Dry Clean", "Machine Wash"],
+            "pattern": ["Plain", "Floral", "Geometric"],
+            "shape": ["Round", "Square", "Rectangular"],
+            "usage": ["Decorative", "Functional", "Ceremonial"],
+            "finish": ["Smooth", "Textured", "Glossy"],
+            "season": ["All Season", "Summer", "Winter"]
+        }
+        
+        return fallback_suggestions.get(spec_key, ["Option 1", "Option 2", "Option 3"])

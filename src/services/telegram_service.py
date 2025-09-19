@@ -164,14 +164,17 @@ class TelegramService:
             response = httpx.get(
                 f"{self.base_url}/getFile",
                 params={"file_id": file_id},
-                timeout=20
+                timeout=15  # Reduced from 20 to 15 seconds
             )
             response.raise_for_status()
             result = response.json()
             
             if result.get("ok"):
-                return result["result"]["file_path"]
-            return None
+                file_path = result["result"]["file_path"]
+                return file_path
+            else:
+                logger.error(f"get_file_info failed: {result}")
+                return None
         except (httpx.HTTPError, KeyError) as e:
             logger.error(f"Error getting file info: {e}")
             return None
@@ -190,8 +193,9 @@ class TelegramService:
             sanitized_path = sanitize_file_path(file_path)
             url = f"{self.file_base_url}/{sanitized_path}"
             
-            response = httpx.get(url, timeout=60)
+            response = httpx.get(url, timeout=45)  # Reduced from 60 to 45 seconds
             response.raise_for_status()
+            content_size = len(response.content)
             return response.content
         except httpx.HTTPError as e:
             logger.error(f"Error downloading file content: {e}")

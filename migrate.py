@@ -30,49 +30,28 @@ def get_alembic_config():
 
 def init_migration():
     """Initialize Alembic (first time setup)"""
-    print("Initializing Alembic migration environment...")
-    try:
-        alembic_cfg = get_alembic_config()
-        command.init(alembic_cfg, "alembic")
-        print("✓ Alembic initialized successfully")
-    except Exception as e:
-        print(f"✗ Failed to initialize Alembic: {e}")
+    alembic_cfg = get_alembic_config()
+    command.init(alembic_cfg, "alembic")
 
 def create_migration(message="Auto migration"):
     """Create a new migration"""
-    print(f"Creating migration: {message}")
-    try:
-        alembic_cfg = get_alembic_config()
-        command.revision(alembic_cfg, autogenerate=True, message=message)
-        print("✓ Migration created successfully")
-    except Exception as e:
-        print(f"✗ Failed to create migration: {e}")
+    alembic_cfg = get_alembic_config()
+    command.revision(alembic_cfg, autogenerate=True, message=message)
 
 def upgrade_database():
     """Apply migrations to database"""
-    print("Upgrading database...")
-    try:
-        alembic_cfg = get_alembic_config()
-        command.upgrade(alembic_cfg, "head")
-        print("✓ Database upgraded successfully")
-    except Exception as e:
-        print(f"✗ Failed to upgrade database: {e}")
+    alembic_cfg = get_alembic_config()
+    command.upgrade(alembic_cfg, "head")
 
 def show_current():
     """Show current migration"""
-    try:
-        alembic_cfg = get_alembic_config()
-        command.current(alembic_cfg)
-    except Exception as e:
-        print(f"✗ Failed to show current migration: {e}")
+    alembic_cfg = get_alembic_config()
+    command.current(alembic_cfg)
 
 def show_history():
     """Show migration history"""
-    try:
-        alembic_cfg = get_alembic_config()
-        command.history(alembic_cfg)
-    except Exception as e:
-        print(f"✗ Failed to show migration history: {e}")
+    alembic_cfg = get_alembic_config()
+    command.history(alembic_cfg)
 
 def main():
     if len(sys.argv) < 2:

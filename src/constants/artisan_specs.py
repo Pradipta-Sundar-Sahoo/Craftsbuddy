@@ -82,10 +82,14 @@ ARTISAN_SPECIFICATIONS = {
 
 # Bot stages
 STAGES = [
+    "await_authentication",
+    "await_phone_verification",
     "await_initial_choice",
     "upload_product_llm_image", 
-    "upload_product_llm_name",
+    "upload_product_llm_name_suggestions",  # Show AI name suggestions
+    "upload_product_llm_name",              # Handle custom name or selected name
     "upload_product_llm_price",
+    "upload_product_llm_specs_suggestions", # Show AI spec suggestions
     "upload_product_llm_specs",
     "ask_query_llm",
     "done"

@@ -13,7 +13,7 @@ class Seller(Base):
     __tablename__ = 'sellers'
     
     id = Column(Integer, primary_key=True)
-    chat_id = Column(BigInteger, unique=True, nullable=False)
+    telegram_id = Column(BigInteger, unique=True, nullable=True)  # Telegram user ID for authentication (nullable initially)
     name = Column(String(255), nullable=False)
     brand_name = Column(String(255))
     phone_number = Column(String(20))
