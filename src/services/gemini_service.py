@@ -1,6 +1,8 @@
 """Gemini AI service for CraftBuddy bot"""
 import json
 import traceback
+import httpx
+import io
 from typing import Dict, Optional, Any, List
 
 from src.config.settings import config
@@ -102,7 +104,7 @@ class GeminiService:
     
     def analyze_product_image(
         self,
-        image_path: str,
+        image_url: str,
         product_name: Optional[str] = None,
         price: Optional[str] = None,
         specifications: Optional[str] = None
@@ -111,7 +113,7 @@ class GeminiService:
         Analyze product image and suggest improvements
         
         Args:
-            image_path: Path to product image
+            image_url: URL to product image (GCS URL)
             product_name: Optional existing product name
             price: Optional existing price
             specifications: Optional existing specifications
@@ -127,13 +129,13 @@ class GeminiService:
             }
         
         try:
-            from PIL import Image
-            import io
-            
-            with open(image_path, "rb") as img_file:
-                image_data = img_file.read()
-            
-            image = Image.open(io.BytesIO(image_data))
+            image = self._load_image_from_url(image_url)
+            if not image:
+                return {
+                    "name": product_name or "Product Name",
+                    "price": price or "$0.00",
+                    "specifications": specifications or "Product specifications"
+                }
             
             prompt_parts = [
                 "You are an AI assistant helping sellers describe their products. "
@@ -175,14 +177,14 @@ class GeminiService:
     
     def generate_description_and_standardize_price(
         self,
-        image_path: str,
+        image_url: str,
         product_data: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
         Generate product description and standardize price format
         
         Args:
-            image_path: Path to product image
+            image_url: URL to product image (GCS URL)
             product_data: Product data dictionary
             
         Returns:
@@ -192,13 +194,9 @@ class GeminiService:
             return self._fallback_description_and_price(product_data)
         
         try:
-            from PIL import Image
-            import io
-            
-            with open(image_path, "rb") as img_file:
-                image_data = img_file.read()
-            
-            image = Image.open(io.BytesIO(image_data))
+            image = self._load_image_from_url(image_url)
+            if not image:
+                return self._fallback_description_and_price(product_data)
             
             # Extract user-provided specifications
             user_specs = product_data.get('specifications', {})
@@ -296,6 +294,24 @@ class GeminiService:
             "occasion": f"What occasions is this {product_name} suitable for?",
             "care_instructions": f"How should this {product_name} be maintained?"
         }
+    
+    def _load_image_from_url(self, image_url: str):
+        """Load PIL Image from URL"""
+        try:
+            from PIL import Image
+            
+            with httpx.Client() as client:
+                response = client.get(image_url)
+                response.raise_for_status()
+                image_data = response.content
+                
+            image = Image.open(io.BytesIO(image_data))
+            logger.info(f"Successfully loaded image from URL: {image_url}")
+            return image
+            
+        except Exception as e:
+            logger.error(f"Failed to load image from URL {image_url}: {e}")
+            return None
     
     def _fallback_description_and_price(self, product_data: Dict[str, Any]) -> Dict[str, Any]:
         """Fallback description and price extraction"""

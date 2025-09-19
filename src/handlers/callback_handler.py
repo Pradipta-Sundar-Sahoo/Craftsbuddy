@@ -135,13 +135,19 @@ class CallbackHandler:
     
     def _finalize_product_upload(self, chat_id: int, session) -> None:
         """Finalize product upload process"""
+        logger.info(f"🎯 CallbackHandler._finalize_product_upload called for chat {chat_id}")
+        logger.info(f"📊 Current session stage: {session.stage}")
+        logger.info(f"🌐 Session cloud_image_url: {session.data.cloud_image_url}")
+        
         product = self.product.finalize_product(chat_id, session)
         
         if product:
+            logger.info(f"✅ Product finalization successful in callback handler")
             session.stage = "done"
             session.llm_history = []
             self.product.send_product_summary(chat_id, product)
         else:
+            logger.error(f"❌ Product finalization failed in callback handler")
             self.telegram.send_message(chat_id, "Error: Failed to process product. Please start again.")
             session.reset()
             self.telegram.send_welcome_message(chat_id)

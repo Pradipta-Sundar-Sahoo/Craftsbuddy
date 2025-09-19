@@ -1,9 +1,6 @@
 """Product data models"""
 from typing import Dict, Optional
 from dataclasses import dataclass, field
-import json
-import os
-import time
 
 @dataclass
 class Product:
@@ -12,7 +9,7 @@ class Product:
     price: int = 0
     description: str = "Product description"
     specifications: Dict[str, str] = field(default_factory=dict)
-    local_image_path: Optional[str] = None
+    cloud_image_url: Optional[str] = None
     
     def to_dict(self) -> Dict:
         """Convert to dictionary for JSON serialization"""
@@ -21,7 +18,7 @@ class Product:
             "price": self.price,
             "description": self.description,
             "specifications": self.specifications,
-            "local_image_path": self.local_image_path
+            "cloud_image_url": self.cloud_image_url
         }
     
     @classmethod
@@ -32,26 +29,13 @@ class Product:
             price=data.get("price", 0),
             description=data.get("description", "Product description"),
             specifications=data.get("specifications", {}),
-            local_image_path=data.get("local_image_path")
+            cloud_image_url=data.get("cloud_image_url")
         )
     
     def is_valid(self) -> bool:
         """Check if product has minimum required data"""
         return bool(self.product_name and self.product_name != "Product Name")
     
-    def save_to_file(self, chat_id: int, data_dir: str = "product_data") -> str:
-        """Save product to JSON file"""
-        os.makedirs(data_dir, exist_ok=True)
-        filename = f"{data_dir}/chat_{chat_id}_product_{int(time.time())}.json"
-        
-        try:
-            with open(filename, "w", encoding="utf-8") as f:
-                json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
-            print(f"Product data saved to {filename}")
-            return filename
-        except IOError as e:
-            print(f"Failed to save product data: {e}")
-            raise
 
 @dataclass
 class SpecificationQuestions:

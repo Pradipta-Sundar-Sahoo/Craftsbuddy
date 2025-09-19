@@ -149,14 +149,21 @@ class MessageHandler:
     
     def _handle_specs_stage(self, chat_id: int, text: str, session) -> None:
         """Handle specifications input stage"""
+        logger.info(f"🔄 _handle_specs_stage called for chat {chat_id} with text: '{text}'")
+        
         if not text:
+            logger.warning(f"⚠️  Empty text received in specs stage for chat {chat_id}")
             return
         
         # Process the specification answer
+        logger.info(f"📋 Processing specification answer...")
         has_more = self.product.process_specification_answer(chat_id, session, text)
+        
+        logger.info(f"🔄 has_more: {has_more}")
         
         if not has_more:
             # All specifications collected, finalize product
+            logger.info(f"🎯 All specifications collected, calling _finalize_product_upload...")
             self._finalize_product_upload(chat_id, session)
     
     def _handle_query_stage(self, chat_id: int, text: str, session) -> None:
@@ -183,13 +190,22 @@ class MessageHandler:
     
     def _finalize_product_upload(self, chat_id: int, session) -> None:
         """Finalize product upload process"""
+        logger.info(f"🎯 _finalize_product_upload called for chat {chat_id}")
+        logger.info(f"📊 Current session stage: {session.stage}")
+        logger.info(f"🌐 Session cloud_image_url: {session.data.cloud_image_url}")
+        logger.info(f"📝 Session product_name: {session.data.product_name}")
+        logger.info(f"💰 Session price: {session.data.price}")
+        logger.info(f"📋 Session specifications: {session.data.specifications}")
+        
         product = self.product.finalize_product(chat_id, session)
         
         if product:
+            logger.info(f"✅ Product finalization successful, updating session stage to 'done'")
             session.stage = "done"
             session.llm_history = []
             self.product.send_product_summary(chat_id, product)
         else:
+            logger.error(f"❌ Product finalization failed for chat {chat_id}")
             self.telegram.send_message(chat_id, "Error: Failed to process product. Please start again.")
             session.reset()
             self.telegram.send_welcome_message(chat_id)
@@ -204,7 +220,7 @@ class MessageHandler:
                 "product_name": session.data.product_name,
                 "price": session.data.price,
                 "specifications": session.data.specifications,
-                "local_image_path": session.data.local_image_path,
+                "cloud_image_url": session.data.cloud_image_url,
                 "current_spec_index": session.data.current_spec_index
             }
             

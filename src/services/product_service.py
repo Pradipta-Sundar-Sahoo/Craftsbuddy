@@ -1,12 +1,13 @@
 """Product service for handling product-related operations"""
 from typing import Dict, Optional, Tuple
-import os
 
 from src.models.product import Product, SpecificationQuestions
 from src.models.session import Session
 from src.services.gemini_service import GeminiService
 from src.services.telegram_service import TelegramService
-from src.utils.file_utils import save_image_file, get_file_extension_from_path
+from src.services.gcs_service import GCSService
+from src.services.database_service import DatabaseService
+from src.utils.file_utils import get_file_extension_from_path
 from src.utils.logger import get_logger
 from src.config.settings import config
 
@@ -16,12 +17,34 @@ class ProductService:
     """Service for product-related operations"""
     
     def __init__(self, telegram_service: TelegramService, gemini_service: GeminiService):
+        logger.info("🔄 Initializing ProductService...")
         self.telegram = telegram_service
         self.gemini = gemini_service
         
-        # Ensure directories exist
-        os.makedirs(config.IMAGE_SAVE_DIR, exist_ok=True)
-        os.makedirs(config.PRODUCT_DATA_DIR, exist_ok=True)
+        # Initialize Database Service
+        try:
+            self.db_service = DatabaseService()
+            logger.info("✅ DatabaseService initialized successfully")
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize DatabaseService: {e}")
+            raise
+        
+        # Initialize Google Cloud Storage service (required)
+        if not config.USE_GCS or not config.GCS_BUCKET_NAME:
+            logger.error(f"❌ GCS configuration missing - USE_GCS: {config.USE_GCS}, BUCKET: {config.GCS_BUCKET_NAME}")
+            raise ValueError("GCS configuration is required - set GCS_BUCKET_NAME and optionally GCS_CREDENTIALS_PATH")
+        
+        try:
+            self.gcs_service = GCSService(
+                bucket_name=config.GCS_BUCKET_NAME,
+                credentials_path=config.GCS_CREDENTIALS_PATH
+            )
+            logger.info("✅ GCS service initialized successfully")
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize GCS service: {e}")
+            raise ValueError("Failed to initialize GCS service - check your configuration")
+        
+        logger.info("✅ ProductService fully initialized")
     
     def handle_image_upload(
         self,
@@ -30,7 +53,7 @@ class ProductService:
         session: Session
     ) -> Tuple[bool, Optional[str]]:
         """
-        Handle product image upload
+        Handle product image upload to Google Cloud Storage
         
         Args:
             file_id: Telegram file ID
@@ -40,34 +63,51 @@ class ProductService:
         Returns:
             Tuple of (success, error_message)
         """
+        logger.info(f"🔄 Starting image upload process for chat {chat_id}, file_id: {file_id}")
+        
         try:
             # Get file info from Telegram
+            logger.info(f"🔄 Getting file info from Telegram for file_id: {file_id}")
             file_path = self.telegram.get_file_info(file_id)
             if not file_path:
+                logger.error(f"❌ Failed to get file info from Telegram for file_id: {file_id}")
                 return False, "Failed to get file information from Telegram"
             
+            logger.info(f"✅ Got file path from Telegram: {file_path}")
+            
             # Download file content
+            logger.info(f"🔄 Downloading file content from Telegram...")
             file_content = self.telegram.download_file(file_path)
             if not file_content:
+                logger.error(f"❌ Failed to download file content from Telegram")
                 return False, "Failed to download image from Telegram"
             
-            # Save image locally
+            logger.info(f"✅ Downloaded file content: {len(file_content)} bytes")
+            
             file_extension = get_file_extension_from_path(file_path)
-            local_image_path = save_image_file(
-                file_content,
-                chat_id,
-                file_extension,
-                config.IMAGE_SAVE_DIR
+            logger.info(f"📄 File extension detected: {file_extension}")
+            
+            # Upload to Google Cloud Storage
+            logger.info(f"🔄 Uploading to GCS...")
+            success, cloud_url, error_msg = self.gcs_service.upload_image(
+                file_content, chat_id, file_extension
             )
             
-            # Store image path in session
-            session.data.local_image_path = local_image_path
-            logger.info(f"Image saved for chat {chat_id}: {local_image_path}")
-            
-            return True, None
+            if success and cloud_url:
+                # Store cloud URL in session
+                session.data.cloud_image_url = cloud_url
+                logger.info(f"✅ Image uploaded to GCS successfully!")
+                logger.info(f"🌐 Cloud URL: {cloud_url}")
+                logger.info(f"💾 Stored in session for chat {chat_id}")
+                return True, None
+            else:
+                logger.error(f"❌ GCS upload failed: {error_msg}")
+                return False, error_msg or "Failed to upload image to cloud storage"
             
         except Exception as e:
-            logger.error(f"Error handling image upload for chat {chat_id}: {e}")
+            logger.error(f"💥 Exception in image upload for chat {chat_id}: {e}")
+            import traceback
+            logger.error(f"📋 Traceback: {traceback.format_exc()}")
             return False, "There was an error processing your image. Please try again."
     
     def start_specification_questions(
@@ -205,7 +245,7 @@ class ProductService:
         session: Session
     ) -> Optional[Product]:
         """
-        Finalize product with AI processing and save
+        Finalize product with AI processing and save to database
         
         Args:
             chat_id: Chat ID
@@ -214,15 +254,21 @@ class ProductService:
         Returns:
             Finalized Product object or None if failed
         """
+        logger.info(f"🔄 Starting product finalization for chat {chat_id}")
+        
         try:
             self.telegram.send_message(
                 chat_id,
                 "Processing your product information with AI assistance..."
             )
             
-            image_path = session.data.local_image_path
-            if not image_path or not os.path.exists(image_path):
-                logger.error(f"No valid image found for chat {chat_id}")
+            # Get cloud image URL from session
+            cloud_image_url = session.data.cloud_image_url
+            logger.info(f"🌐 Cloud image URL from session: {cloud_image_url}")
+            
+            if not cloud_image_url:
+                logger.error(f"❌ No cloud image URL found in session for chat {chat_id}")
+                logger.error(f"📊 Session data: {vars(session.data)}")
                 return None
             
             # Create product data dictionary for AI processing
@@ -231,30 +277,69 @@ class ProductService:
                 "price": session.data.price or "0",
                 "specifications": session.data.specifications
             }
+            logger.info(f"📋 Product data for AI: {product_data}")
             
-            # Generate description and standardize price using AI
+            # Generate description and standardize price using AI with cloud URL
+            logger.info(f"🔄 Calling Gemini AI for description and price...")
             desc_and_price = self.gemini.generate_description_and_standardize_price(
-                image_path,
+                cloud_image_url,
                 product_data
             )
+            logger.info(f"🤖 AI response: {desc_and_price}")
             
-            # Create final Product object
-            product = Product(
+            # Get or create seller
+            logger.info(f"🔄 Getting/creating seller for chat {chat_id}")
+            seller = self.db_service.get_seller_by_chat_id(chat_id)
+            if not seller:
+                logger.info(f"👤 Creating new seller for chat {chat_id}")
+                seller = self.db_service.create_seller(
+                    chat_id=chat_id,
+                    name=f"User_{chat_id}"
+                )
+                if not seller:
+                    logger.error(f"❌ Failed to create seller for chat {chat_id}")
+                    return None
+                logger.info(f"✅ Created seller with ID: {seller.id}")
+            else:
+                logger.info(f"✅ Found existing seller with ID: {seller.id}")
+            
+            # Save product to database
+            logger.info(f"💾 Saving product to database...")
+            db_product = self.db_service.create_product(
+                seller_id=seller.id,
                 product_name=product_data["product_name"],
                 price=desc_and_price.get("standardized_price", 0),
                 description=desc_and_price.get("description", "Product description"),
-                specifications=session.data.specifications,
-                local_image_path=image_path
+                cloud_image_url=cloud_image_url,
+                specifications=session.data.specifications
             )
             
-            # Save product to file
-            filename = product.save_to_file(chat_id, config.PRODUCT_DATA_DIR)
-            logger.info(f"Product saved for chat {chat_id}: {filename}")
+            if not db_product:
+                logger.error(f"❌ Failed to save product to database for chat {chat_id}")
+                return None
             
+            logger.info(f"✅ Product saved to database successfully!")
+            logger.info(f"🆔 Product ID: {db_product.id}")
+            logger.info(f"📝 Product name: {db_product.product_name}")
+            logger.info(f"💰 Price: {db_product.price}")
+            logger.info(f"🌐 Cloud URL: {db_product.cloud_image_url}")
+            
+            # Create Product dataclass for return (for consistency with existing code)
+            product = Product(
+                product_name=db_product.product_name,
+                price=db_product.price,
+                description=db_product.description,
+                specifications=session.data.specifications,
+                cloud_image_url=db_product.cloud_image_url
+            )
+            
+            logger.info(f"🎉 Product finalization completed successfully for chat {chat_id}")
             return product
             
         except Exception as e:
-            logger.error(f"Error finalizing product for chat {chat_id}: {e}")
+            logger.error(f"💥 Exception in product finalization for chat {chat_id}: {e}")
+            import traceback
+            logger.error(f"📋 Traceback: {traceback.format_exc()}")
             return None
     
     def send_product_summary(self, chat_id: int, product: Product) -> None:

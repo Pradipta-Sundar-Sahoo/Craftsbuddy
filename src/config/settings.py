@@ -22,9 +22,10 @@ class BotConfig:
     # Session Configuration
     CONTEXT_TIMEOUT_SECONDS: int = 15 * 60  # 15 minutes
     
-    # File Storage Configuration
-    IMAGE_SAVE_DIR: str = "product_images"
-    PRODUCT_DATA_DIR: str = "product_data"
+    # Google Cloud Storage Configuration (Required)
+    GCS_BUCKET_NAME: Optional[str] = os.getenv("GCS_BUCKET_NAME")
+    GCS_CREDENTIALS_PATH: Optional[str] = os.getenv("GCS_CREDENTIALS_PATH")
+    USE_GCS: bool = bool(GCS_BUCKET_NAME)
     
     # Bot Instance Configuration
     BOT_POLLING_TIMEOUT: int = 25

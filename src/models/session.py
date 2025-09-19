@@ -11,7 +11,7 @@ class SessionData:
     specifications: Dict[str, str] = field(default_factory=dict)
     spec_questions: Dict[str, str] = field(default_factory=dict)
     current_spec_index: int = 0
-    local_image_path: Optional[str] = None
+    cloud_image_url: Optional[str] = None
 
 @dataclass
 class Session:
