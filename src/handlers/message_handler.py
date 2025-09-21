@@ -69,7 +69,24 @@ class MessageHandler:
             if stage == "await_authentication":
                 self._handle_authentication_stage(chat_id, telegram_user_id, session)
             elif stage == "await_phone_verification":
-                self._handle_phone_verification_stage(chat_id, text, telegram_user_id, session)
+                # Handle both text and contact message types
+                phone_number = None
+                if message.get("contact"):
+                    # Extract phone number from shared contact
+                    phone_number = message["contact"].get("phone_number")
+                    logger.info(f"📞 Contact shared with phone: {phone_number}")
+                elif text:
+                    # Use text as phone number
+                    phone_number = text
+                    logger.info(f"📞 Phone number entered as text: {phone_number}")
+                
+                if phone_number:
+                    self._handle_phone_verification_stage(chat_id, phone_number, telegram_user_id, session)
+                else:
+                    self.telegram.send_contact_request(
+                        chat_id,
+                        "Please share your contact or enter your phone number."
+                    )
             elif stage == "await_initial_choice":
                 # If not a callback and not a command, show welcome
                 if not message.get("callback_query"):
@@ -134,12 +151,9 @@ class MessageHandler:
                 session.stage = "await_initial_choice"
                 self.telegram.send_welcome_message(chat_id)
             else:
-                # User not found, ask for phone number
+                # User not found, ask for phone number with contact button
                 session.stage = "await_phone_verification"
-                self.telegram.send_message(
-                    chat_id,
-                    "Hi! To start using CraftBuddy bot, please share your contact number."
-                )
+                self.telegram.send_contact_request(chat_id)
         except Exception as e:
             logger.error(f"💥 Error during authentication for chat {chat_id}: {e}")
             self.telegram.send_message(
@@ -151,20 +165,48 @@ class MessageHandler:
         """Handle phone number verification and telegram_id update"""
         
         try:
-            # Clean phone number (remove spaces, dashes, etc.)
-            cleaned_phone = phone_number.strip().replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+            # Clean phone number (remove spaces, dashes, parentheses, plus signs, etc.)
+            cleaned_phone = phone_number.strip().replace(" ", "").replace("-", "").replace("(", "").replace(")", "").replace("+", "")
+            
+            # Basic validation
+            if not cleaned_phone.isdigit() or len(cleaned_phone) < 7:
+                self.telegram.send_contact_request(
+                    chat_id,
+                    "Please enter a valid phone number or use the button below to share your contact."
+                )
+                return
+            
+            logger.info(f"🔍 Looking up phone number: {cleaned_phone} for telegram_user_id: {telegram_user_id}")
             
             # Check if phone number exists in database
             user = self.db_service.get_user_by_phone_number(cleaned_phone)
             
             if user:
+                logger.info(f"✅ Found user with phone {cleaned_phone}: {user.name} (ID: {user.id})")
+                
+                # Check if telegram_id is already set for this user
+                if user.telegram_id and user.telegram_id != telegram_user_id:
+                    logger.warning(f"⚠️ User {user.id} already has different telegram_id: {user.telegram_id} vs {telegram_user_id}")
+                    self.telegram.send_message(
+                        chat_id,
+                        "This phone number is already linked to another Telegram account. Please contact support if this is an error."
+                    )
+                    return
+                
                 # Phone number found, update telegram_id
                 updated_user = self.db_service.update_user_telegram_id(cleaned_phone, telegram_user_id)
                 
                 if updated_user:
+                    logger.info(f"✅ Successfully updated telegram_id for user {updated_user.id}")
                     # Store telegram_user_id in session for future use
                     session.data.telegram_user_id = telegram_user_id
                     session.stage = "await_initial_choice"
+                    
+                    # Send personalized welcome message
+                    self.telegram.send_message(
+                        chat_id,
+                        f"Welcome back, {updated_user.name}! 🎉"
+                    )
                     self.telegram.send_welcome_message(chat_id)
                 else:
                     logger.error(f"❌ Failed to update telegram_id for phone: {cleaned_phone}")
@@ -174,15 +216,18 @@ class MessageHandler:
                     )
             else:
                 # Phone number not found in database
+                logger.info(f"❌ Phone number {cleaned_phone} not found in database")
                 self.telegram.send_message(
                     chat_id,
-                    "Oops, it looks like you haven't registered yourself on the site. Please sign in on: https://craftbuddy.com"
+                    "Oops, it looks like you haven't registered yourself on the site. Please sign in on: https://craftbuddy.com\n\nOnce registered, come back and try again! 😊"
                 )
                 # Reset session so they can try again
                 session.reset()
                 
         except Exception as e:
             logger.error(f"💥 Error during phone verification for chat {chat_id}: {e}")
+            import traceback
+            logger.error(f"📋 Traceback: {traceback.format_exc()}")
             self.telegram.send_message(
                 chat_id,
                 "Sorry, there was an error verifying your phone number. Please try again with /restart."

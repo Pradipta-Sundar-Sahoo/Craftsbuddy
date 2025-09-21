@@ -301,3 +301,32 @@ class TelegramService:
         except (KeyError, ValueError):
             logger.error("Failed to extract largest photo")
             return None
+    
+    def send_contact_request(self, chat_id: int, text: str = None) -> Optional[Dict[str, Any]]:
+        """
+        Send a message with a contact request keyboard
+        
+        Args:
+            chat_id: Telegram chat ID  
+            text: Optional custom message text
+            
+        Returns:
+            Response from Telegram API or None if failed
+        """
+        if not text:
+            text = "Hi! To start using CraftBuddy bot, please share your contact or enter your phone number."
+        
+        # Create a keyboard with "Share Contact" button
+        keyboard = {
+            "keyboard": [
+                [{"text": "📞 Share Contact", "request_contact": True}]
+            ],
+            "resize_keyboard": True,
+            "one_time_keyboard": True
+        }
+        
+        return self.send_message(
+            chat_id=chat_id,
+            text=text,
+            reply_markup=json.dumps(keyboard)
+        )
