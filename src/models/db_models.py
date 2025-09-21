@@ -8,9 +8,9 @@ import json
 
 Base = declarative_base()
 
-class Seller(Base):
-    """Seller/Artisan information"""
-    __tablename__ = 'sellers'
+class User(Base):
+    """User information"""
+    __tablename__ = 'users'
     
     id = Column(Integer, primary_key=True)
     telegram_id = Column(BigInteger, unique=True, nullable=True)  # Telegram user ID for authentication (nullable initially)
@@ -18,18 +18,19 @@ class Seller(Base):
     brand_name = Column(String(255))
     phone_number = Column(String(20))
     address = Column(Text)
+    is_seller = Column(Boolean, default=False, nullable=False)
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
     
     # Relationships
-    products = relationship("Product", back_populates="seller", cascade="all, delete-orphan")
+    products = relationship("Product", back_populates="user", cascade="all, delete-orphan")
 
 class Product(Base):
     """Product information"""
     __tablename__ = 'products'
     
     id = Column(Integer, primary_key=True)
-    seller_id = Column(Integer, ForeignKey('sellers.id'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     product_name = Column(String(500), nullable=False)
     price = Column(Integer, nullable=False, default=0)  # Price in smallest currency unit
     description = Column(Text)
@@ -40,7 +41,7 @@ class Product(Base):
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
     
     # Relationships
-    seller = relationship("Seller", back_populates="products")
+    user = relationship("User", back_populates="products")
     specifications = relationship("ProductSpecification", back_populates="product", cascade="all, delete-orphan")
     
     def to_dict(self) -> Dict[str, Any]:

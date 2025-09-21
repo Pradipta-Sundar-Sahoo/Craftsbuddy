@@ -2,7 +2,7 @@
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
-from src.models.db_models import Seller, Product, ProductSpecification
+from src.models.db_models import User, Product, ProductSpecification
 from src.config.database import get_database_config
 from src.utils.logger import get_logger
 
@@ -18,100 +18,101 @@ class DatabaseService:
         """Get database session"""
         return self.db_config.get_session()
     
-    # Seller operations
-    def create_seller(self, name: str, brand_name: str = None, 
-                     phone_number: str = None, address: str = None, telegram_id: int = None) -> Optional[Seller]:
-        """Create a new seller"""
-        logger.info(f"🔄 Creating seller - name: {name}, telegram_id: {telegram_id}")
+    # User operations
+    def create_user(self, name: str, brand_name: str = None, 
+                     phone_number: str = None, address: str = None, telegram_id: int = None, is_seller: bool = False) -> Optional[User]:
+        """Create a new user"""
+        logger.info(f"🔄 Creating user - name: {name}, telegram_id: {telegram_id}, is_seller: {is_seller}")
         try:
             with self.get_session() as session:
-                seller = Seller(
+                user = User(
                     telegram_id=telegram_id,
                     name=name,
                     brand_name=brand_name,
                     phone_number=phone_number,
-                    address=address
+                    address=address,
+                    is_seller=is_seller
                 )
-                logger.info(f"📝 Seller object created, adding to session...")
-                session.add(seller)
-                logger.info(f"💾 Committing seller to database...")
+                logger.info(f"📝 User object created, adding to session...")
+                session.add(user)
+                logger.info(f"💾 Committing user to database...")
                 session.commit()
-                session.refresh(seller)
-                logger.info(f"✅ Seller created successfully with ID: {seller.id}")
-                return seller
+                session.refresh(user)
+                logger.info(f"✅ User created successfully with ID: {user.id}")
+                return user
         except SQLAlchemyError as e:
-            logger.error(f"❌ SQLAlchemy error creating seller: {e}")
+            logger.error(f"❌ SQLAlchemy error creating user: {e}")
             import traceback
             logger.error(f"📋 Traceback: {traceback.format_exc()}")
             return None
         except Exception as e:
-            logger.error(f"💥 Unexpected error creating seller: {e}")
+            logger.error(f"💥 Unexpected error creating user: {e}")
             import traceback
             logger.error(f"📋 Traceback: {traceback.format_exc()}")
             return None
     
-# Removed get_seller_by_chat_id method - now using telegram_id for identification
+# Removed get_user_by_chat_id method - now using telegram_id for identification
     
-    def get_seller_by_telegram_id(self, telegram_id: int) -> Optional[Seller]:
-        """Get seller by telegram ID"""
+    def get_user_by_telegram_id(self, telegram_id: int) -> Optional[User]:
+        """Get user by telegram ID"""
         try:
             with self.get_session() as session:
-                seller = session.query(Seller).filter(Seller.telegram_id == telegram_id).first()
-                return seller
+                user = session.query(User).filter(User.telegram_id == telegram_id).first()
+                return user
         except SQLAlchemyError as e:
-            logger.error(f"Failed to get seller by telegram_id {telegram_id}: {e}")
+            logger.error(f"Failed to get user by telegram_id {telegram_id}: {e}")
             return None
     
-    def get_seller_by_phone_number(self, phone_number: str) -> Optional[Seller]:
-        """Get seller by phone number"""
+    def get_user_by_phone_number(self, phone_number: str) -> Optional[User]:
+        """Get user by phone number"""
         try:
             with self.get_session() as session:
-                seller = session.query(Seller).filter(Seller.phone_number == phone_number).first()
-                return seller
+                user = session.query(User).filter(User.phone_number == phone_number).first()
+                return user
         except SQLAlchemyError as e:
-            logger.error(f"Failed to get seller by phone_number {phone_number}: {e}")
+            logger.error(f"Failed to get user by phone_number {phone_number}: {e}")
             return None
     
-    def update_seller_telegram_id(self, phone_number: str, telegram_id: int) -> Optional[Seller]:
-        """Update seller's telegram_id by phone number"""
+    def update_user_telegram_id(self, phone_number: str, telegram_id: int) -> Optional[User]:
+        """Update user's telegram_id by phone number"""
         try:
             with self.get_session() as session:
-                seller = session.query(Seller).filter(Seller.phone_number == phone_number).first()
-                if seller:
-                    old_telegram_id = seller.telegram_id
-                    seller.telegram_id = telegram_id
+                user = session.query(User).filter(User.phone_number == phone_number).first()
+                if user:
+                    old_telegram_id = user.telegram_id
+                    user.telegram_id = telegram_id
                     session.commit()
-                    session.refresh(seller)
-                    logger.info(f"Updated telegram_id for seller with phone: {phone_number}")
-                return seller
+                    session.refresh(user)
+                    logger.info(f"Updated telegram_id for user with phone: {phone_number}")
+                return user
         except SQLAlchemyError as e:
-            logger.error(f"Failed to update seller telegram_id: {e}")
+            logger.error(f"Failed to update user telegram_id: {e}")
             return None
     
-    def update_seller(self, telegram_id: int, **kwargs) -> Optional[Seller]:
-        """Update seller information"""
+    def update_user(self, telegram_id: int, **kwargs) -> Optional[User]:
+        """Update user information"""
         try:
             with self.get_session() as session:
-                seller = session.query(Seller).filter(Seller.telegram_id == telegram_id).first()
-                if seller:
+                user = session.query(User).filter(User.telegram_id == telegram_id).first()
+                if user:
                     for key, value in kwargs.items():
-                        if hasattr(seller, key) and value is not None:
-                            setattr(seller, key, value)
+                        if hasattr(user, key) and value is not None:
+                            setattr(user, key, value)
                     session.commit()
-                    session.refresh(seller)
-                    logger.info(f"Updated seller for telegram_id: {telegram_id}")
-                return seller
+                    session.refresh(user)
+                    logger.info(f"Updated user for telegram_id: {telegram_id}")
+                return user
         except SQLAlchemyError as e:
-            logger.error(f"Failed to update seller: {e}")
+            logger.error(f"Failed to update user: {e}")
             return None
     
     # Product operations
-    def create_product(self, seller_id: int, product_name: str, price: int, 
+    def create_product(self, user_id: int, product_name: str, price: int, 
                       description: str = None, local_image_path: str = None,
                       cloud_image_url: str = None,
                       specifications: Dict[str, str] = None) -> Optional[Product]:
         """Create a new product with specifications"""
-        logger.info(f"🔄 Creating product: {product_name} for seller_id: {seller_id}")
+        logger.info(f"🔄 Creating product: {product_name} for user_id: {user_id}")
         logger.info(f"💰 Price: {price}")
         logger.info(f"📝 Description: {description}")
         logger.info(f"🌐 Cloud URL: {cloud_image_url}")
@@ -121,7 +122,7 @@ class DatabaseService:
             with self.get_session() as session:
                 logger.info(f"📝 Creating Product database object...")
                 product = Product(
-                    seller_id=seller_id,
+                    user_id=user_id,
                     product_name=product_name,
                     price=price,
                     description=description,
@@ -170,16 +171,16 @@ class DatabaseService:
             logger.error(f"📋 Traceback: {traceback_str}")
             return None
     
-    def get_products_by_seller(self, seller_id: int) -> List[Product]:
-        """Get all products for a seller"""
+    def get_products_by_user(self, user_id: int) -> List[Product]:
+        """Get all products for a user"""
         try:
             with self.get_session() as session:
                 return session.query(Product).filter(
-                    Product.seller_id == seller_id,
+                    Product.user_id == user_id,
                     Product.is_active == True
                 ).all()
         except SQLAlchemyError as e:
-            logger.error(f"Failed to get products for seller_id {seller_id}: {e}")
+            logger.error(f"Failed to get products for user_id {user_id}: {e}")
             return []
     
     def get_product_by_id(self, product_id: int) -> Optional[Product]:
@@ -216,16 +217,16 @@ class DatabaseService:
             with open(json_file_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             
-            # Get or create seller
-            seller = self.get_seller_by_telegram_id(telegram_id)
-            if not seller:
-                seller = self.create_seller(f"User_{telegram_id}", telegram_id=telegram_id)
-                if not seller:
+            # Get or create user
+            user = self.get_user_by_telegram_id(telegram_id)
+            if not user:
+                user = self.create_user(f"User_{telegram_id}", telegram_id=telegram_id, is_seller=True)
+                if not user:
                     return False
             
             # Create product
             product = self.create_product(
-                seller_id=seller.id,
+                user_id=user.id,
                 product_name=data.get('product_name', 'Unknown Product'),
                 price=data.get('price', 0),
                 description=data.get('description', ''),

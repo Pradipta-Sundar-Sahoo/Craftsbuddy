@@ -292,25 +292,26 @@ class ProductService:
             )
             logger.info(f"🤖 AI response: {desc_and_price}")
             
-            # Get or create seller
-            logger.info(f"🔄 Getting/creating seller for telegram_user_id {telegram_user_id}")
-            seller = self.db_service.get_seller_by_telegram_id(telegram_user_id)
-            if not seller:
-                logger.info(f"👤 Creating new seller for telegram_user_id {telegram_user_id}")
-                seller = self.db_service.create_seller(
+            # Get or create user
+            logger.info(f"🔄 Getting/creating user for telegram_user_id {telegram_user_id}")
+            user = self.db_service.get_user_by_telegram_id(telegram_user_id)
+            if not user:
+                logger.info(f"👤 Creating new user for telegram_user_id {telegram_user_id}")
+                user = self.db_service.create_user(
                     name=f"User_{telegram_user_id}",
-                    telegram_id=telegram_user_id
+                    telegram_id=telegram_user_id,
+                    is_seller=True
                 )
-                if not seller:
-                    logger.error(f"❌ Failed to create seller for telegram_user_id {telegram_user_id}")
+                if not user:
+                    logger.error(f"❌ Failed to create user for telegram_user_id {telegram_user_id}")
                     return None
-                logger.info(f"✅ Created seller with ID: {seller.id}")
+                logger.info(f"✅ Created user with ID: {user.id}")
             else:
-                logger.info(f"✅ Found existing seller with ID: {seller.id}")
+                logger.info(f"✅ Found existing user with ID: {user.id}")
             
             # Save product to database
             logger.info(f"💾 Saving product to database...")
-            logger.info(f"👤 Seller ID: {seller.id} (Name: {seller.name})")
+            logger.info(f"👤 User ID: {user.id} (Name: {user.name})")
             logger.info(f"📝 Product name: {product_data['product_name']}")
             logger.info(f"💰 Price: {desc_and_price.get('standardized_price', 0)}")
             logger.info(f"📄 Description: {desc_and_price.get('description', 'Product description')[:100]}...")
@@ -319,7 +320,7 @@ class ProductService:
             
             logger.info(f"💾 Saving product to database...")
             db_product = self.db_service.create_product(
-                seller_id=seller.id,
+                user_id=user.id,
                 product_name=product_data["product_name"],
                 price=desc_and_price.get("standardized_price", 0),
                 description=desc_and_price.get("description", "Product description"),

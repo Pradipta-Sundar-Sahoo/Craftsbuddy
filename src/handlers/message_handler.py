@@ -124,9 +124,9 @@ class MessageHandler:
         
         try:
             # Check if telegram_id exists in database
-            seller = self.db_service.get_seller_by_telegram_id(telegram_user_id)
+            user = self.db_service.get_user_by_telegram_id(telegram_user_id)
             
-            if seller:
+            if user:
                 # User is registered, proceed to main flow
                 logger.info(f"✅ User authenticated successfully for telegram_id: {telegram_user_id}")
                 # Store telegram_user_id in session for future use
@@ -155,13 +155,13 @@ class MessageHandler:
             cleaned_phone = phone_number.strip().replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
             
             # Check if phone number exists in database
-            seller = self.db_service.get_seller_by_phone_number(cleaned_phone)
+            user = self.db_service.get_user_by_phone_number(cleaned_phone)
             
-            if seller:
+            if user:
                 # Phone number found, update telegram_id
-                updated_seller = self.db_service.update_seller_telegram_id(cleaned_phone, telegram_user_id)
+                updated_user = self.db_service.update_user_telegram_id(cleaned_phone, telegram_user_id)
                 
-                if updated_seller:
+                if updated_user:
                     # Store telegram_user_id in session for future use
                     session.data.telegram_user_id = telegram_user_id
                     session.stage = "await_initial_choice"
@@ -176,7 +176,7 @@ class MessageHandler:
                 # Phone number not found in database
                 self.telegram.send_message(
                     chat_id,
-                    "Oops, it looks like you haven't registered yourself on the site. Please sign in as seller on: https://craftbuddy.com"
+                    "Oops, it looks like you haven't registered yourself on the site. Please sign in on: https://craftbuddy.com"
                 )
                 # Reset session so they can try again
                 session.reset()
